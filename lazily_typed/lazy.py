@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar, Callable, Any, Type, Optional
+from typing import Generic, TypeVar, Callable, Any, Optional, Union
 
 from lazily_typed import get_logger, location_info
 
@@ -11,13 +11,13 @@ class Lazy(Generic[_T]):
     Basic generic class for lazy loading. It will not initialize the wrapped class/object until an attribute
     is accessed or function call is made, after that most properties and function must.
     Basic Usage:
-        created: Lazy | Client = Lazy(Client) # does not start the Client
+        created: Union[Lazy,Client] = Lazy(Client) # does not start the Client
         lazy.client_method() # will initialize the Client and call client_method
     """
     _cls: _T
-    _instance: _T | None
+    _instance: Union[_T, None]
     _object_close_method: str
-    _builder: Callable[[Any], _T] | _T
+    _builder: Union[Callable[[Any], _T], _T]
     _args: tuple
     _kwargs: dict
 
@@ -67,7 +67,8 @@ class Lazy(Generic[_T]):
             if self._args and args:
                 raise ValueError("Positional Arguments")
             use_args = args if args else self._args
-            use_kwargs = self._kwargs | kwargs
+            use_kwargs = self._kwargs.copy()
+            use_kwargs.update(kwargs)
             self.__build(*use_args, **use_kwargs)
             return self.instance__
         return self.instance__.__call__(*args, **kwargs)
@@ -95,8 +96,8 @@ class LazyFactory(Generic[_T]):
         """
         Example:
             factory: LazyFactory = LazyFactory(list)
-            lazy_instance: Lazy | list = factory(v1,v2)
-            other_lazy_instance Lazy | list = factory(v3,v4)
+            lazy_instance: Union[Lazy,list] = factory(v1,v2)
+            other_lazy_instance Union[Lazy,list] = factory(v3,v4)
 
         :param args:
         :param kwargs:
@@ -105,7 +106,8 @@ class LazyFactory(Generic[_T]):
         if self._args and args:
             raise ValueError("Positional Arguments")
         use_args = args if args else self._args
-        use_kwargs = self._kwargs | kwargs
+        use_kwargs = self._kwargs.copy()
+        use_kwargs.update(kwargs)
         return self.__build(*use_args, **use_kwargs)
 
     def __build(self, *args, **kwargs) -> Lazy[_T]:
@@ -127,7 +129,7 @@ class LazyContext(Lazy):
             raise ValueError("No instance")
         return self._instance
 
-    def __enter__(self) -> Lazy | _T:
+    def __enter__(self) -> Union[Lazy, _T]:
         if self._instance is None:
             return self
         return self.instance__  # type: ignore[return-value]
@@ -150,5 +152,5 @@ def lazy_lambda(function: _T):
     def wrapped(*args, **kwargs):
         return Lazy(function.__annotations__.get('return', None), function, *args, **kwargs)
 
-    f: Lazy | _T = wrapped  # type: ignore[assignment]
+    f: Union[Lazy, _T] = wrapped  # type: ignore[assignment]
     return f
