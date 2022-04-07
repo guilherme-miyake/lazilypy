@@ -111,13 +111,13 @@ class LazyFactory(Generic[_T]):
         return self.__build(*use_args, **use_kwargs)
 
     def __build(self, *args, **kwargs) -> Lazy[_T]:
-        return Lazy(
+        return Lazy(  # type: ignore[misc]
             cls=self._cls,
             builder=self._builder,
             object_close_method=self._object_close_method,
             *args,
             **kwargs
-        )  # type: ignore[misc]
+        )
 
 
 class LazyContext(Lazy):
