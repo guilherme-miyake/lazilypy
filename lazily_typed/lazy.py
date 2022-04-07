@@ -120,7 +120,7 @@ class LazyFactory(Generic[_T]):
         )
 
 
-class LazyContext(Lazy):
+class LazyContext(Lazy, Generic[_T]):
     _cls: _T
     _instance: Union[_T, None]
     _object_close_method: str
@@ -144,7 +144,7 @@ class LazyContext(Lazy):
     def __build(self, *args, **kwargs) -> None:
         lazy_logger.info(f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}")
         lazy_logger.debug(f"<{hex(id(self))}>           {location_info()}")
-        self._instance = self._builder(*args, **kwargs).__enter__()
+        self._instance = self._builder(*args, **kwargs).__enter__()  # type: ignore
         lazy_logger.debug(f"<{hex(id(self))}> Started   {self}")
 
     def __exit__(self, exc_type, exc_val, exc_tb):
