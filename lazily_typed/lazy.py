@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar, Callable, Any
+from typing import Generic, TypeVar, Callable, Any, Type, Optional
 
 from lazily_typed import get_logger, location_info
 
@@ -7,10 +7,17 @@ lazy_logger = get_logger("Lazy Logger")
 
 
 class Lazy(Generic[_T]):
+    """
+    Basic generic class for lazy loading. It will not initialize the wrapped class/object until an attribute
+    is accessed or function call is made, after that most properties and function must.
+    Basic Usage:
+        created: Lazy | Client = Lazy(Client) # does not start the Client
+        lazy.client_method() # will initialize the Client and call client_method
+    """
     _cls: _T
-    _instance: _T
+    _instance: _T | None
     _object_close_method: str
-    _builder: Callable[[Any], _T]
+    _builder: Callable[[Any], _T] | _T
     _args: tuple
     _kwargs: dict
 
@@ -23,7 +30,7 @@ class Lazy(Generic[_T]):
             **kwargs
     ):
         self._cls = cls
-        self._instance: object = None
+        self._instance = None
         self._object_close_method = object_close_method
         self._builder = builder if builder is not None else cls
         self._args = args
@@ -39,6 +46,8 @@ class Lazy(Generic[_T]):
     def instance__(self) -> _T:
         if self._instance is None:
             self.__build(*self._args, **self._kwargs)
+        if self._instance is None:
+            raise ValueError("No instance")
         return self._instance
 
     def __build(self, *args, **kwargs):
@@ -74,22 +83,24 @@ class Lazy(Generic[_T]):
         return self.instance__.__setattr__(key, value)
 
 
-class LazyFactory:
+class LazyFactory(Generic[_T]):
     _cls: _T
     _object_close_method: str
-    _builder: Callable[[Any], _T]
+    _builder: Optional[Callable[[Any], _T]]
     _args: tuple
     _kwargs: dict
-    __init__ = Lazy.__init__
+    __init__ = Lazy.__init__  # type: ignore[assignment]
 
     def __call__(self, *args, **kwargs):
         """
-        factory = LazyFactory(MyClass)
-        lazy_instance = factory(v1,v2)
-        other_lazy_instance = factory(v3,v4)
+        Example:
+            factory: LazyFactory = LazyFactory(list)
+            lazy_instance: Lazy | list = factory(v1,v2)
+            other_lazy_instance Lazy | list = factory(v3,v4)
+
         :param args:
         :param kwargs:
-        :return: object MyClass or object()
+        :return: Lazy(_T) object
         """
         if self._args and args:
             raise ValueError("Positional Arguments")
@@ -97,33 +108,29 @@ class LazyFactory:
         use_kwargs = self._kwargs | kwargs
         return self.__build(*use_args, **use_kwargs)
 
-    def __build(self, *args, **kwargs):
+    def __build(self, *args, **kwargs) -> Lazy[_T]:
         return Lazy(
             cls=self._cls,
             builder=self._builder,
             object_close_method=self._object_close_method,
             *args,
             **kwargs
-        )
+        )  # type: ignore[misc]
 
 
 class LazyContext(Lazy):
-    """
-    with LazyContext(FileHandler, open, path, 'w') as f:
-        do stuff
-        f.write()
-    """
-
     @property
     def instance__(self) -> _T:
         if self._instance is None:
             self.__build(*self._args, **self._kwargs)
+        if self._instance is None:
+            raise ValueError("No instance")
         return self._instance
 
-    def __enter__(self) -> _T:
+    def __enter__(self) -> Lazy | _T:
         if self._instance is None:
             return self
-        return self.instance__
+        return self.instance__  # type: ignore[return-value]
 
     def __build(self, *args, **kwargs) -> None:
         lazy_logger.info(f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}")
@@ -143,5 +150,5 @@ def lazy_lambda(function: _T):
     def wrapped(*args, **kwargs):
         return Lazy(function.__annotations__.get('return', None), function, *args, **kwargs)
 
-    f: _T = wrapped
+    f: Lazy | _T = wrapped  # type: ignore[assignment]
     return f
