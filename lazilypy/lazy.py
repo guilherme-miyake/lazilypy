@@ -1,6 +1,6 @@
 from typing import Generic, TypeVar, Callable, Any, Optional, Union
 
-from lazily_typed import get_logger, location_info
+from lazilypy import get_logger, location_info
 
 _T = TypeVar("_T")
 lazy_logger = get_logger("Lazy Logger")
