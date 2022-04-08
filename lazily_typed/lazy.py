@@ -2,7 +2,7 @@ from typing import Generic, TypeVar, Callable, Any, Optional, Union
 
 from lazily_typed import get_logger, location_info
 
-_T = TypeVar('_T')
+_T = TypeVar("_T")
 lazy_logger = get_logger("Lazy Logger")
 
 
@@ -14,6 +14,7 @@ class Lazy(Generic[_T]):
         created: Union[Lazy,Client] = Lazy(Client) # does not start the Client
         lazy.client_method() # will initialize the Client and call client_method
     """
+
     _cls: _T
     _instance: Union[_T, None]
     _object_close_method: str
@@ -22,12 +23,12 @@ class Lazy(Generic[_T]):
     _kwargs: dict
 
     def __init__(
-            self,
-            cls: _T,
-            *args,
-            builder: Callable[[Any], _T] = None,
-            object_close_method: str = 'close',
-            **kwargs
+        self,
+        cls: _T,
+        *args,
+        builder: Callable[[Any], _T] = None,
+        object_close_method: str = "close",
+        **kwargs,
     ):
         self._cls = cls
         self._instance = None
@@ -51,7 +52,9 @@ class Lazy(Generic[_T]):
         return self._instance
 
     def __build(self, *args, **kwargs):
-        lazy_logger.info(f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}")
+        lazy_logger.info(
+            f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}"
+        )
         lazy_logger.debug(f"<{hex(id(self))}>           {location_info()}")
         self._instance = self._builder(*args, **kwargs)
         lazy_logger.debug(f"<{hex(id(self))}> Started   {self}")
@@ -116,7 +119,7 @@ class LazyFactory(Generic[_T]):
             builder=self._builder,
             object_close_method=self._object_close_method,
             *args,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -142,7 +145,9 @@ class LazyContext(Lazy, Generic[_T]):
         return self.instance__  # type: ignore[return-value]
 
     def __build(self, *args, **kwargs) -> None:
-        lazy_logger.info(f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}")
+        lazy_logger.info(
+            f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}"
+        )
         lazy_logger.debug(f"<{hex(id(self))}>           {location_info()}")
         self._instance = self._builder(*args, **kwargs).__enter__()  # type: ignore
         lazy_logger.debug(f"<{hex(id(self))}> Started   {self}")
@@ -151,13 +156,15 @@ class LazyContext(Lazy, Generic[_T]):
         if self._instance is not None:
             lazy_logger.debug(f"<{hex(id(self))}> Exiting   {self}")
             lazy_logger.debug(f"<{hex(id(self))}>           {location_info()}")
-            if hasattr(self.instance__, '__exit__'):
+            if hasattr(self.instance__, "__exit__"):
                 return self.instance__.__exit__(exc_type, exc_val, exc_tb)
 
 
 def lazy_lambda(function: _T):
     def wrapped(*args, **kwargs):
-        return Lazy(function.__annotations__.get('return', None), function, *args, **kwargs)
+        return Lazy(
+            function.__annotations__.get("return", None), function, *args, **kwargs
+        )
 
     f: Union[Lazy, _T] = wrapped  # type: ignore[assignment]
     return f
