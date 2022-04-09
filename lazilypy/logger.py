@@ -18,7 +18,8 @@ def location_info():
     while True:
         previous_frame = frame.f_back
         no_previous_frame = previous_frame is None
-        no_file_context = "__file__" not in previous_frame.f_globals
+        no_globals = not hasattr(previous_frame, "f_globals")
+        no_file_context = no_globals or "__file__" not in previous_frame.f_globals
         is_import_frame = (
             no_file_context or "importlib" in previous_frame.f_globals["__file__"]
         )
