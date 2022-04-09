@@ -2,7 +2,7 @@ import inspect
 import logging
 
 
-def get_logger(name="Lazy"):
+def get_logger(name="Lazy Logger"):
     logger = logging.Logger(name, level=30)
     __log_formatter = logging.Formatter(
         "%(levelname)-8s %(asctime)s: %(message)s", datefmt="%Y-%m-%d:%H:%M:%S"

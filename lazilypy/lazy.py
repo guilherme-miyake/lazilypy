@@ -1,10 +1,11 @@
 from functools import wraps
+from logging import Logger
 from typing import Generic, TypeVar, Callable, Any, Union, Tuple
 
 from lazilypy import get_logger, location_info
 
 _T = TypeVar("_T")
-lazy_logger = get_logger("Lazy Logger")
+logger = get_logger()
 
 
 class Lazy(Generic[_T]):
@@ -18,26 +19,30 @@ class Lazy(Generic[_T]):
         *args,
         lazy_builder: Callable[[Any], _T] = None,
         lazy_partial: bool = True,
+        lazy_logger: Logger = logger,
         **kwargs,
     ):
         self._lazy_dict_ = self.__dict__
         self._lazy_obj_ = self
         self._lazy_cls_ = self.__class__
+        self._lazy_logger_ = lazy_logger
         self._lazy_ref_cls_ = lazy_cls
         self._lazy_builder_ = lazy_builder if lazy_builder is not None else lazy_cls
         self._lazy_args_ = args
         self._lazy_kwargs_ = kwargs
         self._lazy_default_keywords_ += "__call__" if lazy_partial else ""
-        lazy_logger.debug(f"{self._lazy_obj_} Created    with {self._lazy_ref_cls_}")
-        lazy_logger.debug(f"{self._lazy_obj_}           {location_info()}")
+        self._lazy_logger_.debug(
+            f"{self._lazy_obj_} Created    with {self._lazy_ref_cls_}"
+        )
+        self._lazy_logger_.debug(f"{self._lazy_obj_}           {location_info()}")
 
     def _lazy_build_(self, *args, **kwargs):
-        lazy_logger.info(
+        self._lazy_logger_.info(
             f"{self._lazy_obj_} Starting   with args:{args}, kwargs:{kwargs}"
         )
-        lazy_logger.debug(f"{self._lazy_obj_}           {location_info()}")
+        self._lazy_logger_.debug(f"{self._lazy_obj_}           {location_info()}")
         self._lazy_ref_instance_ = self._lazy_builder_(*args, **kwargs)
-        lazy_logger.debug(f"{self._lazy_obj_} Started   ")
+        self._lazy_logger_.debug(f"{self._lazy_obj_} Started   ")
 
     def __repr__(self):
         return f"<{self._lazy_cls_.__name__}({self._lazy_ref_cls_.__name__}) at {hex(id(self._lazy_obj_))}>"
@@ -87,14 +92,16 @@ class LazyFactory(Generic[_T]):
         lazy_cls: _T,
         *args,
         lazy_builder: Callable[[Any], _T] = None,
+        lazy_logger: Logger = logger,
         **kwargs,
     ):
         self._lazy_ref_cls_ = lazy_cls
         self._lazy_builder_ = lazy_builder if lazy_builder is not None else lazy_cls
         self._lazy_args_ = args
         self._lazy_kwargs_ = kwargs
-        lazy_logger.debug(f"{self} Created    with {self._lazy_ref_cls_}")
-        lazy_logger.debug(f"{self}           {location_info()}")
+        self._lazy_logger_ = lazy_logger
+        self._lazy_logger_.debug(f"{self} Created    with {self._lazy_ref_cls_}")
+        self._lazy_logger_.debug(f"{self}           {location_info()}")
 
     def __call__(self, *args, **kwargs):
         if self._lazy_args_ and args:
@@ -107,6 +114,7 @@ class LazyFactory(Generic[_T]):
         use_kwargs |= {
             "lazy_cls": self._lazy_ref_cls_,
             "lazy_builder": self._lazy_builder_,
+            "lazy_logger": self._lazy_logger_,
         }
         return Lazy(*use_args, **use_kwargs)
 
@@ -115,12 +123,12 @@ class LazyContext(Lazy, Generic[_T]):
     _lazy_reserved_keywords_ = ("__enter__", "__exit__")
 
     def _lazy_build_(self, *args, **kwargs) -> None:
-        lazy_logger.info(
+        self._lazy_logger_.info(
             f"{self._lazy_obj_} Starting   with args:{args}, kwargs:{kwargs}"
         )
-        lazy_logger.debug(f"          {location_info()}")
+        self._lazy_logger_.debug(f"          {location_info()}")
         self._lazy_ref_instance_ = self._lazy_builder_(*args, **kwargs).__enter__()  # type: ignore[operator]
-        lazy_logger.debug(f"{self._lazy_obj_} Started   ")
+        self._lazy_logger_.debug(f"{self._lazy_obj_} Started   ")
 
     def __enter__(self) -> Union[Lazy, _T]:
         if self._lazy_ref_instance_ is None:
@@ -129,8 +137,8 @@ class LazyContext(Lazy, Generic[_T]):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._lazy_ref_instance_ is not None:
-            lazy_logger.debug(f"{self._lazy_obj_} Exiting   ")
-            lazy_logger.debug(f"          {location_info()}")
+            self._lazy_logger_.debug(f"{self._lazy_obj_} Exiting   ")
+            self._lazy_logger_.debug(f"          {location_info()}")
             return self._lazy_instance_getter_.__exit__(exc_type, exc_val, exc_tb)
 
 
