@@ -28,3 +28,6 @@ def location_info():
         frame = frame.f_back
 
     return f"File \"{frame.f_globals['__file__']}\", line {frame.f_lineno}"
+
+
+logger = get_logger()

@@ -1,11 +1,11 @@
-
 from logging import Logger
 from typing import Generic, TypeVar, Callable, Any, Union, Tuple
 
-from lazilypy import get_logger, location_info
+from lazilypy import location_info
+from lazilypy.defaults import supported_python_operators, proxy_operator, MethodResponse
+from lazilypy.logging import logger
 
 _T = TypeVar("_T")
-logger = get_logger()
 
 
 class Lazy(Generic[_T]):
@@ -99,6 +99,10 @@ class Lazy(Generic[_T]):
         return self._lazy_instance_getter_.__setattr__(key, value)
 
 
+for operator in supported_python_operators:
+    setattr(Lazy, operator, proxy_operator(operator))
+
+
 class LazyFactory(Generic[_T]):
     def __init__(
         self,
@@ -157,11 +161,18 @@ class LazyContext(Lazy, Generic[_T]):
             return self._lazy_instance_getter_.__exit__(exc_type, exc_val, exc_tb)
 
 
-def lazy_lambda(function: Union[Callable[[Any], _T], Any]):
-    @wraps
+def make_lazy(function: Union[Callable[[Any], _T], Any]):
     def wrapped(*args, **kwargs) -> Union[Lazy, _T]:
+        use_kwargs = kwargs
+        use_kwargs.update(
+            dict(
+                lazy_cls=function.__annotations__.get("return", MethodResponse),
+                lazy_builder=function,
+            )
+        )
         return Lazy(
-            function.__annotations__.get("return", None), function, *args, **kwargs
+            *args,
+            **kwargs,
         )
 
     return wrapped
