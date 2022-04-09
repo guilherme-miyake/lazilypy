@@ -1,4 +1,4 @@
-from functools import wraps
+
 from logging import Logger
 from typing import Generic, TypeVar, Callable, Any, Union, Tuple
 
@@ -9,8 +9,8 @@ logger = get_logger()
 
 
 class Lazy(Generic[_T]):
-    _lazy_ref_instance_ = None
-    _lazy_default_keywords_ = ["__repr__"]
+    _lazy_ref_instance_: Union[_T, None] = None
+    _lazy_default_keywords_ = ["__class__"]
     _lazy_reserved_keywords_: Tuple[str, str] = ("", "")
 
     def __init__(
@@ -22,30 +22,47 @@ class Lazy(Generic[_T]):
         lazy_logger: Logger = logger,
         **kwargs,
     ):
-        self._lazy_dict_ = self.__dict__
-        self._lazy_obj_ = self
+        # create a copy of default keywords
+        self._lazy_default_keywords_ = self._lazy_default_keywords_.copy()
+        # Store own class in other reference
         self._lazy_cls_ = self.__class__
+        # access to class property from now own should start instance (e.g: class checks)
+        self._lazy_default_keywords_.pop(0)
+
         self._lazy_logger_ = lazy_logger
+        # store non-instance class reference
         self._lazy_ref_cls_ = lazy_cls
+        # defaults builder to cls __init__
         self._lazy_builder_ = lazy_builder if lazy_builder is not None else lazy_cls
         self._lazy_args_ = args
         self._lazy_kwargs_ = kwargs
-        self._lazy_default_keywords_ += "__call__" if lazy_partial else ""
+        # Lazy operates as partial by default, lazy_instance(*args,**kwargs) calls will start instance immediately
+        self._lazy_default_keywords_ += ["__call__"] if lazy_partial else ""
         self._lazy_logger_.debug(
-            f"{self._lazy_obj_} Created    with {self._lazy_ref_cls_}"
+            f"{self._lazy_repr_()} Created    with {self._lazy_ref_cls_}"
         )
-        self._lazy_logger_.debug(f"{self._lazy_obj_}           {location_info()}")
+        self._lazy_logger_.debug(f"{self._lazy_repr_()}           {location_info()}")
 
     def _lazy_build_(self, *args, **kwargs):
         self._lazy_logger_.info(
-            f"{self._lazy_obj_} Starting   with args:{args}, kwargs:{kwargs}"
+            f"{self._lazy_repr_()} Starting   with args:{args}, kwargs:{kwargs}"
         )
-        self._lazy_logger_.debug(f"{self._lazy_obj_}           {location_info()}")
+        self._lazy_logger_.debug(f"{self._lazy_repr_()}           {location_info()}")
         self._lazy_ref_instance_ = self._lazy_builder_(*args, **kwargs)
-        self._lazy_logger_.debug(f"{self._lazy_obj_} Started   ")
+        self._lazy_logger_.debug(f"{self._lazy_repr_()} Started   ")
+
+    def _lazy_repr_(self):
+        return f"<{self._lazy_cls_.__name__}({self._lazy_ref_cls_.__name__}) object at {hex(id(self))}>"
 
     def __repr__(self):
-        return f"<{self._lazy_cls_.__name__}({self._lazy_ref_cls_.__name__}) at {hex(id(self._lazy_obj_))}>"
+        if self._lazy_ref_instance_ is None:
+            return self._lazy_repr_()
+        return self._lazy_ref_instance_.__repr__()
+
+    def __str__(self):
+        if self._lazy_ref_instance_ is None:
+            return self._lazy_repr_()
+        return self._lazy_ref_instance_.__str__()
 
     def __call__(self, *args, **kwargs):
         if self._lazy_ref_instance_ is None:
@@ -67,22 +84,18 @@ class Lazy(Generic[_T]):
             raise NameError(f"Lazy builder {self._lazy_builder_} returned {None}")
         return self._lazy_ref_instance_
 
-    def __getattr__(self, item: str):
+    def __getattribute__(self, item):
         if item.startswith("_lazy_") or item in self._lazy_reserved_keywords_:
-            return self._lazy_dict_.__getitem__(item)
-
+            return super(Lazy, self).__getattribute__(item)
         if self._lazy_ref_instance_ is None and item in self._lazy_default_keywords_:
-            return self._lazy_obj_.__dict__.__getitem__(item)
-        print(item)
-        return getattr(self._lazy_instance_getter_, item)
+            return super(Lazy, self).__getattribute__(item)
+        return self._lazy_instance_getter_.__getattribute__(item)
 
     def __setattr__(self, key: str, value):
-        if key == "_lazy_dict_":
-            return self.__dict__.__setitem__(key, value)
         if key.startswith("_lazy_") or key in self._lazy_reserved_keywords_:
-            return self._lazy_dict_.__setitem__(key, value)
+            return super(Lazy, self).__setattr__(key, value)
         if self._lazy_ref_instance_ is None and key in self._lazy_default_keywords_:
-            return self._lazy_dict_.__setitem__(key, value)
+            return super(Lazy, self).__setattr__(key, value)
         return self._lazy_instance_getter_.__setattr__(key, value)
 
 
@@ -124,11 +137,11 @@ class LazyContext(Lazy, Generic[_T]):
 
     def _lazy_build_(self, *args, **kwargs) -> None:
         self._lazy_logger_.info(
-            f"{self._lazy_obj_} Starting   with args:{args}, kwargs:{kwargs}"
+            f"{self._lazy_repr_()} Starting   with args:{args}, kwargs:{kwargs}"
         )
         self._lazy_logger_.debug(f"          {location_info()}")
         self._lazy_ref_instance_ = self._lazy_builder_(*args, **kwargs).__enter__()  # type: ignore[operator]
-        self._lazy_logger_.debug(f"{self._lazy_obj_} Started   ")
+        self._lazy_logger_.debug(f"{self._lazy_repr_()} Started   ")
 
     def __enter__(self) -> Union[Lazy, _T]:
         if self._lazy_ref_instance_ is None:
@@ -137,8 +150,10 @@ class LazyContext(Lazy, Generic[_T]):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._lazy_ref_instance_ is not None:
-            self._lazy_logger_.debug(f"{self._lazy_obj_} Exiting   ")
-            self._lazy_logger_.debug(f"          {location_info()}")
+            self._lazy_logger_.info(f"{self._lazy_repr_()} Exiting   ")
+            self._lazy_logger_.debug(
+                f"{self._lazy_repr_()}           {location_info()}"
+            )
             return self._lazy_instance_getter_.__exit__(exc_type, exc_val, exc_tb)
 
 
