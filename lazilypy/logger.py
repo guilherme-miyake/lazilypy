@@ -16,7 +16,14 @@ def get_logger(name="Lazy"):
 def location_info():
     frame = inspect.currentframe()
     while True:
-        if frame.f_back is None or "importlib" in frame.f_back.f_globals["__file__"]:
+        previous_frame = frame.f_back
+        no_previous_frame = previous_frame is None
+        no_file_context = "__file__" not in previous_frame.f_globals
+        is_import_frame = (
+            no_file_context or "importlib" in previous_frame.f_globals["__file__"]
+        )
+        if no_previous_frame or no_file_context or is_import_frame:
             break
         frame = frame.f_back
+
     return f"File \"{frame.f_globals['__file__']}\", line {frame.f_lineno}"

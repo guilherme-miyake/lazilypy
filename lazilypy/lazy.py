@@ -1,4 +1,6 @@
-from typing import Generic, TypeVar, Callable, Any, Optional, Union
+import abc
+from functools import wraps
+from typing import Generic, TypeVar, Callable, Any, Optional, Union, Tuple
 
 from lazilypy import get_logger, location_info
 
@@ -7,164 +9,137 @@ lazy_logger = get_logger("Lazy Logger")
 
 
 class Lazy(Generic[_T]):
-    """
-    Basic generic class for lazy loading. It will not initialize the wrapped class/object until an attribute
-    is accessed or function call is made, after that most properties and function must.
-    Basic Usage:
-        created: Union[Lazy,Client] = Lazy(Client) # does not start the Client
-        lazy.client_method() # will initialize the Client and call client_method
-    """
-
-    _cls: _T
-    _instance: Union[_T, None]
-    _object_close_method: str
-    _builder: Union[Callable[[Any], _T], _T]
-    _args: tuple
-    _kwargs: dict
+    _lazy_ref_instance_ = None
+    _lazy_default_keywords_ = ["__repr__"]
+    _lazy_reserved_keywords_: Tuple[str, str] = ("", "")
 
     def __init__(
         self,
-        cls: _T,
+        lazy_cls: _T,
         *args,
-        builder: Callable[[Any], _T] = None,
-        object_close_method: str = "close",
+        lazy_builder: Callable[[Any], _T] = None,
+        lazy_partial: bool = True,
         **kwargs,
     ):
-        self._cls = cls
-        self._instance = None
-        self._object_close_method = object_close_method
-        self._builder = builder if builder is not None else cls
-        self._args = args
-        self._kwargs = kwargs
+        self._lazy_dict_ = self.__dict__
+        self._lazy_obj_ = self
+        self._lazy_cls_ = self.__class__
+        self._lazy_ref_cls_ = lazy_cls
+        self._lazy_builder_ = lazy_builder if lazy_builder is not None else lazy_cls
+        self._lazy_args_ = args
+        self._lazy_kwargs_ = kwargs
+        self._lazy_default_keywords_ += "__call__" if lazy_partial else ""
+        lazy_logger.debug(f"{self._lazy_obj_} Created    with {self._lazy_ref_cls_}")
+        lazy_logger.debug(f"{self._lazy_obj_}           {location_info()}")
 
-        lazy_logger.debug(f"<{hex(id(self))}> Created   {self} with {self._cls}")
-        lazy_logger.debug(f"<{hex(id(self))}> Location  {location_info()}")
+    def _lazy_build_(self, *args, **kwargs):
+        lazy_logger.info(
+            f"{self._lazy_obj_} Starting   with args:{args}, kwargs:{kwargs}"
+        )
+        lazy_logger.debug(f"{self._lazy_obj_}           {location_info()}")
+        self._lazy_ref_instance_ = self._lazy_builder_(*args, **kwargs)
+        lazy_logger.debug(f"{self._lazy_obj_} Started   ")
 
     def __repr__(self):
-        return f"<{self.__class__.__name__}({self._cls.__name__})>"
-
-    @property
-    def instance__(self) -> _T:
-        if self._instance is None:
-            self.__build(*self._args, **self._kwargs)
-        if self._instance is None:
-            raise ValueError("No instance")
-        return self._instance
-
-    def __build(self, *args, **kwargs):
-        lazy_logger.info(
-            f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}"
-        )
-        lazy_logger.debug(f"<{hex(id(self))}>           {location_info()}")
-        self._instance = self._builder(*args, **kwargs)
-        lazy_logger.debug(f"<{hex(id(self))}> Started   {self}")
+        return f"<{self._lazy_cls_.__name__}({self._lazy_ref_cls_.__name__}) at {hex(id(self._lazy_obj_))}>"
 
     def __call__(self, *args, **kwargs):
-        """
-        this = Lazy(MyClass)(v1,v2,v3,k1=v4) ~= MyClass(v1,v2,v3,k1=v4)
-        :param args:
-        :param kwargs:
-        :return: object MyClass or object()
-        """
-        if self._instance is None:
-            if self._args and args:
-                raise ValueError("Positional Arguments")
-            use_args = args if args else self._args
-            use_kwargs = self._kwargs.copy()
-            use_kwargs.update(kwargs)
-            self.__build(*use_args, **use_kwargs)
-            return self.instance__
-        return self.instance__.__call__(*args, **kwargs)
+        if self._lazy_ref_instance_ is None:
+            if self._lazy_args_ and args:
+                raise SyntaxError(
+                    f"Positional arguments already defined: {self._lazy_args_}"
+                )
+            use_args_ = args if args else self._lazy_args_
+            use_kwargs_ = self._lazy_kwargs_.copy()
+            use_kwargs_.update(kwargs)
+            self._lazy_build_(*use_args_, **use_kwargs_)
+            return self._lazy_instance_getter_
 
-    def __getattr__(self, item):
-        if item in self.__class__.__annotations__:
-            return getattr(self, item)
-        return getattr(self.instance__, item)
+    @property
+    def _lazy_instance_getter_(self) -> _T:
+        if self._lazy_ref_instance_ is None:
+            self._lazy_build_(*self._lazy_args_, **self._lazy_kwargs_)
+        if self._lazy_ref_instance_ is None:
+            raise NameError(f"Lazy builder {self._lazy_builder_} returned {None}")
+        return self._lazy_ref_instance_
 
-    def __setattr__(self, key, value):
-        if key in self.__class__.__annotations__:
+    def __getattr__(self, item: str):
+        if item.startswith("_lazy_") or item in self._lazy_reserved_keywords_:
+            return self._lazy_dict_.__getitem__(item)
+
+        if self._lazy_ref_instance_ is None and item in self._lazy_default_keywords_:
+            return self._lazy_obj_.__dict__.__getitem__(item)
+        print(item)
+        return getattr(self._lazy_instance_getter_, item)
+
+    def __setattr__(self, key: str, value):
+        if key == "_lazy_dict_":
             return self.__dict__.__setitem__(key, value)
-        return self.instance__.__setattr__(key, value)
+        if key.startswith("_lazy_") or key in self._lazy_reserved_keywords_:
+            return self._lazy_dict_.__setitem__(key, value)
+        if self._lazy_ref_instance_ is None and key in self._lazy_default_keywords_:
+            return self._lazy_dict_.__setitem__(key, value)
+        return self._lazy_instance_getter_.__setattr__(key, value)
 
 
 class LazyFactory(Generic[_T]):
-    _cls: _T
-    _object_close_method: str
-    _builder: Optional[Callable[[Any], _T]]
-    _args: tuple
-    _kwargs: dict
-    __init__ = Lazy.__init__  # type: ignore[assignment]
+    def __init__(
+        self,
+        lazy_cls: _T,
+        *args,
+        lazy_builder: Callable[[Any], _T] = None,
+        **kwargs,
+    ):
+        self._lazy_ref_cls_ = lazy_cls
+        self._lazy_builder_ = lazy_builder if lazy_builder is not None else lazy_cls
+        self._lazy_args_ = args
+        self._lazy_kwargs_ = kwargs
+        lazy_logger.debug(f"{self} Created    with {self._lazy_ref_cls_}")
+        lazy_logger.debug(f"{self}           {location_info()}")
 
     def __call__(self, *args, **kwargs):
-        """
-        Example:
-            factory: LazyFactory = LazyFactory(list)
-            lazy_instance: Union[Lazy,list] = factory(v1,v2)
-            other_lazy_instance Union[Lazy,list] = factory(v3,v4)
-
-        :param args:
-        :param kwargs:
-        :return: Lazy(_T) object
-        """
-        if self._args and args:
-            raise ValueError("Positional Arguments")
-        use_args = args if args else self._args
-        use_kwargs = self._kwargs.copy()
-        use_kwargs.update(kwargs)
-        return self.__build(*use_args, **use_kwargs)
-
-    def __build(self, *args, **kwargs) -> Lazy[_T]:
-        return Lazy(  # type: ignore[misc]
-            cls=self._cls,
-            builder=self._builder,
-            object_close_method=self._object_close_method,
-            *args,
-            **kwargs,
-        )
+        if self._lazy_args_ and args:
+            raise SyntaxError(
+                f"Positional arguments already defined: {self._lazy_args_}"
+            )
+        use_args = args if args else self._lazy_args_
+        use_kwargs = self._lazy_kwargs_.copy()
+        use_kwargs |= kwargs
+        use_kwargs |= {
+            "lazy_cls": self._lazy_ref_cls_,
+            "lazy_builder": self._lazy_builder_,
+        }
+        return Lazy(*use_args, **use_kwargs)
 
 
 class LazyContext(Lazy, Generic[_T]):
-    _cls: _T
-    _instance: Union[_T, None]
-    _object_close_method: str
-    _builder: Union[Callable[[Any], _T], _T]
-    _args: tuple
-    _kwargs: dict
+    _lazy_reserved_keywords_ = ("__enter__", "__exit__")
 
-    @property
-    def instance__(self) -> _T:
-        if self._instance is None:
-            self.__build(*self._args, **self._kwargs)
-        if self._instance is None:
-            raise ValueError("No instance")
-        return self._instance
+    def _lazy_build_(self, *args, **kwargs) -> None:
+        lazy_logger.info(
+            f"{self._lazy_obj_} Starting   with args:{args}, kwargs:{kwargs}"
+        )
+        lazy_logger.debug(f"          {location_info()}")
+        self._lazy_ref_instance_ = self._lazy_builder_(*args, **kwargs).__enter__()  # type: ignore[operator]
+        lazy_logger.debug(f"{self._lazy_obj_} Started   ")
 
     def __enter__(self) -> Union[Lazy, _T]:
-        if self._instance is None:
+        if self._lazy_ref_instance_ is None:
             return self
-        return self.instance__  # type: ignore[return-value]
-
-    def __build(self, *args, **kwargs) -> None:
-        lazy_logger.info(
-            f"<{hex(id(self))}> Starting  {self} with args:{args}, kwargs:{kwargs}"
-        )
-        lazy_logger.debug(f"<{hex(id(self))}>           {location_info()}")
-        self._instance = self._builder(*args, **kwargs).__enter__()  # type: ignore
-        lazy_logger.debug(f"<{hex(id(self))}> Started   {self}")
+        return self._lazy_instance_getter_
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._instance is not None:
-            lazy_logger.debug(f"<{hex(id(self))}> Exiting   {self}")
-            lazy_logger.debug(f"<{hex(id(self))}>           {location_info()}")
-            if hasattr(self.instance__, "__exit__"):
-                return self.instance__.__exit__(exc_type, exc_val, exc_tb)
+        if self._lazy_ref_instance_ is not None:
+            lazy_logger.debug(f"{self._lazy_obj_} Exiting   ")
+            lazy_logger.debug(f"          {location_info()}")
+            return self._lazy_instance_getter_.__exit__(exc_type, exc_val, exc_tb)
 
 
-def lazy_lambda(function: _T):
-    def wrapped(*args, **kwargs):
+def lazy_lambda(function: Callable[[Any], _T] | Any):
+    @wraps
+    def wrapped(*args, **kwargs) -> Lazy | _T:
         return Lazy(
             function.__annotations__.get("return", None), function, *args, **kwargs
         )
 
-    f: Union[Lazy, _T] = wrapped  # type: ignore[assignment]
-    return f
+    return wrapped
