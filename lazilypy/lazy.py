@@ -64,6 +64,11 @@ class Lazy(Generic[_T]):
             return self._lazy_repr_()
         return self._lazy_ref_instance_.__str__()
 
+    def __format__(self, format_spec):
+        if self._lazy_ref_instance_ is None:
+            return self.__format__(format_spec)
+        return self._lazy_ref_instance_.__format__(format_spec)
+
     def __call__(self, *args, **kwargs):
         if self._lazy_ref_instance_ is None:
             if self._lazy_args_ and args:

@@ -1,3 +1,6 @@
+from lazilypy.logging import logger
+
+
 class MethodResponse:
     """
     Missing return type in wrapped function
@@ -9,6 +12,7 @@ class MethodResponse:
 
 def proxy_operator(_lazy_operator_):
     def method(self, *args, **kwargs):
+        logger.debug(_lazy_operator_)
         return self._lazy_instance_getter_.__getattribute__(_lazy_operator_)(
             *args, **kwargs
         )
@@ -32,7 +36,6 @@ supported_python_operators = [
     "__float__",
     "__floor__",
     "__floordiv__",
-    "__format__",
     "__ge__",
     "__getitem__",
     "__getnewargs__",
