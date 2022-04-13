@@ -1,21 +1,32 @@
 from logging import Logger
-from typing import Generic, TypeVar, Callable, Any, Union, Tuple
+from pprint import pprint
+from typing import (
+    Generic,
+    TypeVar,
+    Callable,
+    Any,
+    Union,
+    Tuple,
+    Type,
+    Optional,
+    NewType,
+)
 
 from lazilypy import location_info
 from lazilypy.defaults import supported_python_operators, proxy_operator, MethodResponse
-from lazilypy.logging import logger
+from lazilypy.logs import logger
 
 _T = TypeVar("_T")
 
 
-class Lazy(Generic[_T]):
-    _lazy_ref_instance_: Union[_T, None] = None
-    _lazy_default_keywords_ = ["__class__"]
+class Lazy(NewType, Generic[_T]):
+    _lazy_ref_instance_: Optional[_T] = None
+    _lazy_default_keywords_ = ["__class__", "__supertype__"]
     _lazy_reserved_keywords_: Tuple[str, str] = ("", "")
 
     def __init__(
         self,
-        lazy_cls: _T,
+        lazy_cls: Type[_T],
         *args,
         lazy_builder: Callable[[Any], _T] = None,
         lazy_partial: bool = True,
@@ -28,10 +39,10 @@ class Lazy(Generic[_T]):
         self._lazy_cls_ = self.__class__
         # access to class property from now own should start instance (e.g: class checks)
         self._lazy_default_keywords_.pop(0)
-
         self._lazy_logger_ = lazy_logger
         # store non-instance class reference
         self._lazy_ref_cls_ = lazy_cls
+        self.__supertype__ = lazy_cls
         # defaults builder to cls __init__
         self._lazy_builder_ = lazy_builder if lazy_builder is not None else lazy_cls
         self._lazy_args_ = args
@@ -90,6 +101,7 @@ class Lazy(Generic[_T]):
         return self._lazy_ref_instance_
 
     def __getattribute__(self, item):
+        logger.log(1, f"getattribute: {item}")
         if item.startswith("_lazy_") or item in self._lazy_reserved_keywords_:
             return super(Lazy, self).__getattribute__(item)
         if self._lazy_ref_instance_ is None and item in self._lazy_default_keywords_:
@@ -97,6 +109,7 @@ class Lazy(Generic[_T]):
         return self._lazy_instance_getter_.__getattribute__(item)
 
     def __setattr__(self, key: str, value):
+        logger.log(2, f"setattr: {key}")
         if key.startswith("_lazy_") or key in self._lazy_reserved_keywords_:
             return super(Lazy, self).__setattr__(key, value)
         if self._lazy_ref_instance_ is None and key in self._lazy_default_keywords_:
