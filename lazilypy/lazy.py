@@ -18,8 +18,18 @@ from lazilypy.logs import logger
 
 _T = TypeVar("_T")
 
+try:
 
-class Lazy(NewType, Generic[_T]):
+    class MetaNewType(NewType):
+        pass
+
+except TypeError:
+
+    class MetaNewType(object):  # type: ignore[no-redef]
+        pass
+
+
+class Lazy(MetaNewType, Generic[_T]):
     _lazy_ref_instance_: Optional[_T] = None
     _lazy_default_keywords_ = ["__class__", "__supertype__"]
     _lazy_reserved_keywords_: Tuple[str, str] = ("", "")
