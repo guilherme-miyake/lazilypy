@@ -1,3 +1,5 @@
+import platform
+
 from lazilypy.logs import logger
 
 
@@ -98,13 +100,16 @@ int_operators = [
     "__gt__",
 ]
 
-numeric_builtins = [
-    # abs(a_
-    "__abs__",
+compatibility_builtins = [
     # math.ceil(a)
     "__ceil__",
     # math.floor(a)
     "__floor__",
+]
+
+numeric_builtins = [
+    # abs(a_
+    "__abs__",
     # int(a)
     "__int__",
     # float(a)
@@ -116,6 +121,7 @@ numeric_builtins = [
 supported_python_operators = (
     int_operators
     + numeric_builtins
+    + (compatibility_builtins if platform.python_version() > "3.9.0" else [""])
     + [
         # Concatenation ( seq1 + seq2 )
         "__concat__",
