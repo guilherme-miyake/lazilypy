@@ -20,7 +20,7 @@ _T = TypeVar("_T")
 
 try:
 
-    class MetaNewType(NewType):
+    class MetaNewType(NewType):  # type: ignore[valid-type,misc]
         pass
 
 except TypeError:
